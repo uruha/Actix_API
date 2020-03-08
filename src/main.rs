@@ -1,4 +1,5 @@
 use actix_web::{get, web, App, HttpServer, Responder};
+use listenfd::ListenFd;
 
 #[get("/{id}/{name}/index.html")]
 async fn index(info: web::Path<(u32, String)>) -> impl Responder {
@@ -7,8 +8,14 @@ async fn index(info: web::Path<(u32, String)>) -> impl Responder {
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| App::new().service(index))
-        .bind("127.0.0.1:8080")?
-        .run()
-        .await
+    let mut listenfd = ListenFd::from_env();
+    let mut server = HttpServer::new(|| App::new().service(index));
+
+    server = if let Some(ip) = listenfd.take_tcp_listener(0).unwrap() {
+        server.listen(ip)?
+    } else {
+        server.bind("127.0.0.1:3000")?
+    };
+
+    server.run().await
 }
